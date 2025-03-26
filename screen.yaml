@@ -1,0 +1,10 @@
+path: ./screen # dataset root dir
+train: images/train # train images (relative to 'path') 4 images
+val: images/val # val images (relative to 'path') 4 images
+#test:
+
+#nc: 3
+names:
+  0: unnormal
+  1: black
+  2: normal

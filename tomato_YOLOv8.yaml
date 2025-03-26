@@ -1,0 +1,19 @@
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+#path: ../datasets/Objects365  # dataset root dir
+train: D:/YOLOv/datasets/Tomato/images/train  # train images (relative to 'path') 1742289 images
+val: D:/YOLOv/datasets/Tomato/images/val  # val images (relative to 'path') 80000 images
+#test:  # test images (optional)
+
+# Classes
+names:
+  0: Bacterial_spot
+  1: Early_blight
+  2: healthy
+  3: Late_blight
+  4: Leaf_Mold
+#  5: powdery_mild
+#  6: Septoria_leaf_spot
+#  7: Spider_mites Two-spotted_spider_mite
+#  8: Target_spot
+#  9: Tomato_mosaic_virus
+#  10: Toamto_Yellow_Leaf_Curl_Virus

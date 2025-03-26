@@ -1,0 +1,66 @@
+# Ultralytics YOLO 🚀, AGPL-3.0 license
+# YOLOv9c
+# 618 layers, 25590912 parameters, 104.0 GFLOPs
+
+# Parameters
+nc: 1 # number of classes
+kpt_shape: [3, 3] # number of keypoints, number of dims (2 for x,y or 3 for x,y,visible)
+scales: # model compound scaling constants, i.e. 'model=yolov8n-pose.yaml' will call yolov8-pose.yaml with scale 'n'
+  # [depth, width, max_channels]
+  n: [0.33, 0.25, 1024]
+#  s: [0.33, 0.50, 1024]
+#  m: [0.67, 0.75, 768]
+#  l: [1.00, 1.00, 512]
+#  x: [1.00, 1.25, 512]
+# YOLOv8 🚀 with MobileNetV3-Small Backbone
+# Backbone配置 (MobileNetV3-Small适配640输入)
+backbone:
+  # [from, repeats, module, args]
+#  - [-1, 1, Conv, [16, 3, 2, 1, 'HS']]   # 0-P1/2 (640->320)
+  - [-1, 1, Conv_Hardwish, [16, 3, 2]]   # 0-P1/2 (640->320) 320*320*16
+
+  # 下采样阶段
+  - [-1, 1, InvertedResidual_Relu, [16, 16, 3, 1, True]]    # 2 320*320*16
+  - [-1, 1, InvertedResidual_Relu, [16, 24, 3, 2, False]]   # 3-P2/4 (320->160)  160*160*24
+  - [-1, 1, InvertedResidual_Relu, [24, 24, 3, 1, False]]   # 4 4-5  160*160*24
+  - [-1, 1, InvertedResidual_Relu, [24, 24, 3, 1, False]]   #5
+
+  - [-1, 1, InvertedResidual_HardWish, [24, 40, 5, 2, True]]  #6 6-P3/8 (160->80) 80*80*40
+  - [-1, 1, InvertedResidual_HardWish, [40, 40, 5, 1, True]]  #6 7-8  80*80*40
+  - [-1, 1, InvertedResidual_HardWish, [40, 40, 5, 1, True]]
+
+  - [-1, 1, InvertedResidual_HardWish, [40, 48, 5, 2, True]]  #7 9-P4/16 (80->40)  40*40*48
+  - [-1, 1, InvertedResidual_HardWish, [48, 48, 5, 1, True]] #8 10-11  40*40*48
+  - [-1, 1, InvertedResidual_HardWish, [48, 48, 5, 1, True]]
+
+  - [-1, 1, InvertedResidual_HardWish, [48, 96, 5, 2, True]]  #9 12-P5/32 (40->20) 20*20*96
+  - [-1, 1, InvertedResidual_HardWish, [96, 96, 5, 1, True]]  #10 13-14  20*20*96
+  - [-1, 1, InvertedResidual_HardWish, [96, 96, 5, 1, True]]
+
+  # 特征增强层 (保持空间维度)
+#  - [-1, 1, Conv, [576, 1, 1, 1, 'HS']]  # 15 (20x20)
+  - [-1, 1, Conv_Hardwish, [576, 1, 1]]        #11 20*20*576
+#  - [-1, 1, nn.Hardswish, []]         #12 20*20*576
+  - [-1, 1, SPPF, [576, 5]]      #13      20*20*576         # 16 空间金字塔池化
+
+# YOLOv8 Head配置
+head:
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]   #14 17 上采样
+  - [[-1, 6], 1, Concat, [1]]                   #15 18 拼接P4(40)和上采样特征
+  - [-1, 1, C2f, [576, 3, True]]                 #16 19 (40x40)
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]   #17 20 上采样(40->80)
+  - [[-1, 4], 1, Concat, [1]]                    #18 21 拼接P3(80)和上采样特征
+  - [-1, 1, C2f, [288, 3, True]]                 #19 22 (80x80)
+
+  - [-1, 1, Conv, [288, 3, 2]]                   #20 23 下采样(80->40)
+  - [[-1, 14], 1, Concat, [1]]                   #21 24 拼接中间特征
+  - [-1, 1, C2f, [576, 3, True]]                 #22 25 (40x40)
+
+  - [-1, 1, Conv, [576, 3, 2]]                   #23 26 下采样(40->20)
+  - [[-1, 10], 1, Concat, [1]]
+  - [-1, 1, C2f, [1152, 3, True]]                #25 28 (20x20)
+
+  # 检测层 (对应80,40,20三个尺度)
+#  - [[22, 25, 28], 1, Detect, [nc]]  # 输出(P3, P4, P5)
+  - [[17, 20, 23], 1, Detect, [nc]]  # 输出(P3, P4, P5)

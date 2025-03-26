@@ -1,0 +1,94 @@
+# Ultralytics YOLO 🚀, AGPL-3.0 license
+# YOLOv8-pose keypoints/pose estimation model. For Usage examples see https://docs.ultralytics.com/tasks/pose
+
+# Parameters
+nc: 1 # number of classes
+kpt_shape: [2, 3] # number of keypoints, number of dims (2 for x,y or 3 for x,y,visible)
+scales: # model compound scaling constants, i.e. 'model=yolov8n-pose.yaml' will call yolov8-pose.yaml with scale 'n'
+  # [depth, width, max_channels]
+  n: [0.33, 0.25, 1024]
+  s: [0.33, 0.50, 1024]
+  m: [0.67, 0.75, 768]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.25, 512]
+
+# YOLOv8.0n backbone
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, Conv, [64, 3, 2]] # 0-P1/2  第0层，-1代表上层输出作为本层的输出。0层输入图像为640*640*3，conv：64代表输出通道数，3代表卷积核大小，2为步长
+
+  - [-1, 1, Conv, [128, 3, 2]] # 1-P2/4 第1层，操作同上
+  - [-1, 3, C2f, [128, True]] #第2层；本层代表C2f模块，3代表重复三次。128代表输出通道数，True表示Bottleneck有shortcut。
+
+  - [-1, 1, Conv, [256, 3, 2]] # 3-P3/8 第3层，卷积操作，256代表输出通道数，k=3,s=2;此时输出特征尺寸图为80*80*256，卷积的参数不变三次卷积后，特征图尺寸变为原来的1/8
+  - [-1, 6, C2f, [256, True]] #第4层； C2f模块，同第2层，经过这层输出特征图依旧为80*80*256
+#  - [-1, 1, CoordAtt, [256, 256, 32]] # 5 使用 CoordAtt，输入通道 256，输出通道 256，分组 32
+  - [-1, 1, Conv, [512, 3, 2]] # 5-P4/16 第5层；卷积操作，输出特征图尺寸为40*40*512
+  - [-1, 6, C2f, [512, True]]# 第6层； 同2,4层
+  - [-1, 1, Conv, [1024, 3, 2]] # 7-P5/32 第7层，同上卷积操作，输出特征图尺寸为20*20*1024
+  - [-1, 3, C2f, [1024, True]]# 第8层，同上C2f模块，特征图尺寸依旧是20*20*1024。
+
+
+#
+  - [-1, 1, SPPF, [1024, 5]] # 9 第9层：本层是快速空间金字塔池化层（SPPF）。1024代表输出通道数，5代表池化核大小k。
+  - [-1, 1, LSKA, [7]]#11代表卷积核大小，可以填写7、11、23、35、41、53
+#  - [-1, 1, ECA, [1024,1024]]
+#  - [-1, 1, SPPF, [1024, 3]] # 配合SpatialAttention使用
+#  - [-1, 1, ChannelAttention, [1024]]
+#  - [-1, 1, CBAM, [1024]]                  #结合模块结构图和代码可以看出，最后concat得到的特征图尺寸是20*20*（512*4），经过一次Conv得到20*20*1024。\
+#  - [-1, 1, SpatialAttention, [3]]
+
+
+# YOLOv8.0n head
+head:
+  - [-1, 1, nn.Upsample, [ None, 2, "nearest" ] ] #11 调整10层输出的特征图尺寸到40x40x1024
+  - [[-1, 6], 1, Concat, [ 1 ] ] # 12 40x40x1536
+  - [-1, 1, VoVGSCSP, [1536, 512, 2 ] ] # 13 40x40x512
+
+  - [-1, 1, nn.Upsample, [ None, 2, "nearest" ] ] #14 调整12层输出的特征图尺寸到80x80x512
+  - [[-1, 4 ], 1, Concat, [ 1 ] ] # 15 80x80x768
+  - [-1, 1, VoVGSCSP, [768, 256, 2 ] ] # 16 80x80x256
+
+  - [-1, 1, GSConv, [256, 3, 2 ] ] # 17 40x40x256
+
+#  - [-1, 1, nn.Upsample, [None, 2, "nearest" ] ] #18  调整15层输出的特征图尺寸到160x160x256
+  - [[-1, 12 ], 1, Concat, [1] ] # 18 40x40x768
+#  - [[-1, 11 ], 1, Concat, [1] ] # 18 40x40x768
+  - [-1, 1, VoVGSCSP, [768, 512, 2 ] ] # 19 40x40x512
+
+  - [-1, 1, GSConv, [512, 3, 2] ] #20 20x20x512
+
+#  - [-1, 1, nn.Upsample, [None, 2, "nearest" ] ] #21 调整18层输出的特征图尺寸到320x320x512
+  - [[-1, 10 ], 1, Concat, [1] ] #21 20x20x1536
+#  - [[-1, 9 ], 1, Concat, [1] ] #21 20x20x1536
+  - [-1, 1, VoVGSCSP, [1536, 1024, 2 ] ] #22 20x20x1024
+
+  - [[16, 19, 22], 1, Pose, [nc, kpt_shape]]
+#  - [[15, 18, 21], 1, Pose, [nc, kpt_shape]] # Pose(P3, P4, P5) 第22层，pose层，[15,18,21]代表将第15、18、21层的输出(分别是80*80*256、40*40*512、20*20*1024)作为本层的输入，nc是数据集的类别数。
+
+
+#  - [-1, 1, nn.Upsample, [ None, 2, "nearest" ] ] #11 调整10层输出的特征图尺寸到40x40x1024
+#  - [[-1, 6], 1, Concat, [ 1 ] ] # 12 40x40x1536
+#  - [-1, 1, VoVGSCSP, [1536, 512, 2 ] ] # 13 40x40x512
+#
+#  - [-1, 1, nn.Upsample, [ None, 2, "nearest" ] ] #14 调整12层输出的特征图尺寸到80x80x512
+#  - [[-1, 4 ], 1, Concat, [ 1 ] ] # 15 80x80x768
+#  - [-1, 1, VoVGSCSP, [768, 256, 2 ] ] # 16 80x80x256
+#
+#  - [-1, 1, GSConv, [256, 3, 2 ] ] # 17 40x40x256
+#
+##  - [-1, 1, nn.Upsample, [None, 2, "nearest" ] ] #18  调整15层输出的特征图尺寸到160x160x256
+#
+#  - [[-1, 11 ], 1, Concat, [1] ] # 18 40x40x768
+#  - [-1, 1, VoVGSCSP, [768, 512, 2 ] ] # 19 40x40x512
+#
+#  - [-1, 1, GSConv, [512, 3, 2] ] #20 20x20x512
+#
+##  - [-1, 1, nn.Upsample, [None, 2, "nearest" ] ] #21 调整18层输出的特征图尺寸到320x320x512
+#
+#  - [[-1, 9 ], 1, Concat, [1] ] #21 20x20x1536
+#  - [-1, 1, VoVGSCSP, [1536, 1024, 2 ] ] #22 20x20x1024
+#
+#
+#  - [[15, 18, 21], 1, Pose, [nc, kpt_shape]] # Pose(P3, P4, P5) 第22层，pose层，[15,18,21]代表将第15、18、21层的输出(分别是80*80*256、40*40*512、20*20*1024)作为本层的输入，nc是数据集的类别数。
+
